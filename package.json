@@ -1,6 +1,6 @@
 {
   "name": "content-lens",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "private": true,
   "description": "Local browser tools for sorting Instagram and TikTok content",
   "scripts": {
