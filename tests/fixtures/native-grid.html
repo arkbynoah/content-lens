@@ -1,0 +1,52 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Content Lens browser regression tests</title>
+<style>body{font:16px system-ui;margin:30px;background:#111;color:white} main{max-width:720px}.grid{display:flex;flex-direction:column;gap:3px}.row{display:flex;gap:3px}.cell{flex:1;min-width:0}.tile{display:block;position:relative;color:white}.cover{height:110px;background:#333}svg{width:12px;height:12px}.metric{display:flex;gap:4px}.pass{color:#9fe8ae}.fail{color:#ff9999}</style>
+<h1>Native grid regression tests</h1><ol id="results"></ol><main><div id="grid" class="grid"></div></main>
+<script src="../../extension/core.js"></script><script src="../../extension/adapters.js"></script><script src="../../extension/grid.js"></script>
+<script>
+const results=document.querySelector('#results'), container=document.querySelector('#grid');
+function check(name,fn){const li=document.createElement('li');try{fn();li.textContent='PASS: '+name;li.className='pass'}catch(e){li.textContent='FAIL: '+name+' — '+e.message;li.className='fail'}results.append(li)}
+function assert(x,msg){if(!x)throw Error(msg||'assertion failed')}
+function tile(id,count){return `<div class="cell"><div><a class="tile" href="https://www.instagram.com/test/reel/${id}/"><div class="cover" style="background-image:linear-gradient(#333,#444)"></div><div class="metric"><div><svg aria-label="View Count Icon"><title>View Count Icon</title></svg></div><span>${count}</span></div><div data-sf-action><img src="" alt=""><span>2026</span></div></a></div></div>`}
+container.innerHTML='<div class="row">'+tile('A','121K')+tile('B','3M')+tile('C','49.6K')+'</div><div class="row">'+tile('D','1M')+tile('E','—')+tile('F','0')+'</div>';
+const url='https://www.instagram.com/test/reels/';
+const posts=ContentLensAdapters.readTiles(document,url),model=ContentLensGrid.discover(posts), sorter=new ContentLensGrid.NativeGrid(document);
+const original=posts.map(p=>p.anchor);
+const visibleOrder=()=>model.posts.filter(p=>p.anchor.getClientRects().length).sort((a,b)=>{const ar=a.anchor.getBoundingClientRect(),br=b.anchor.getBoundingClientRect();return Math.abs(ar.top-br.top)>3?ar.top-br.top:ar.left-br.left}).map(p=>p.url.split('/').at(-2)).join(',');
+check('Real Instagram View Count Icon wrapper is parsed, not third-party button numbers',()=>assert(JSON.stringify(posts.map(p=>p.views))==='[121000,3000000,49600,1000000,null,0]'));
+check('Row grid detection preserves three columns',()=>assert(model.columns===3&&model.rows.length===2));
+check('Native tiles move into descending visual order across rows',()=>{sorter.apply(model,ContentLensCore.selectPosts(model.posts,{}));assert(visibleOrder()==='B,D,A,C,F,E',visibleOrder())});
+check('No native tile is cloned, replaced, or reparented',()=>assert(original.every((a,i)=>a===document.querySelectorAll('.tile')[i])));
+check('Ascending sort keeps unknown last and treats zero as a count',()=>{sorter.apply(model,ContentLensCore.selectPosts(model.posts,{}, {direction:'asc'}));assert(visibleOrder()==='F,C,A,D,B,E',visibleOrder())});
+check('Tag filters collapse the native grid without empty slots',()=>{const tags={['tag:'+model.posts[1].url]:{format:'Talking head'}};sorter.apply(model,ContentLensCore.selectPosts(model.posts,tags,{format:'Talking head'}));assert(visibleOrder()==='B',visibleOrder())});
+check('Reset restores original visual order and layout',()=>{sorter.reset();assert(visibleOrder()==='A,B,C,D,E,F',visibleOrder());assert(!document.querySelector('[data-cl-grid]'))});
+check('New native rows participate in the next sort',()=>{const row=document.createElement('div');row.className='row';row.innerHTML=tile('G','5M');container.append(row);const next=ContentLensGrid.discover(ContentLensAdapters.readTiles(document,url));sorter.apply(next,ContentLensCore.selectPosts(next.posts,{}));assert(next.posts.length===7);assert(next.posts.find(p=>p.url.includes('/G/')).cell.style.getPropertyValue('--cl-order')==='0');sorter.reset()});
+
+check('Instagram unlabeled hover icons expose likes and comments without hovering',()=>{
+ const tile=document.createElement('a');
+ tile.innerHTML='<ul style="display:none"><li><span>55.5K</span><span class="xlsotpv"></span></li><li><span>9,298</span><span class="x100pdo0"></span></li></ul>';
+ assert(ContentLensAdapters.metricCount(tile,'likes')===55500);
+ assert(ContentLensAdapters.metricCount(tile,'comments')===9298);
+ assert(ContentLensAdapters.metricCount(tile,'views')===null);
+});
+check('Unrecognized lists and third-party counters never become engagement counts',()=>{
+ const tile=document.createElement('a');
+ tile.innerHTML='<ul><li>99</li><li>88</li></ul><div data-sf-action><ul><li><span class="xlsotpv"></span>2026</li><li><span class="x100pdo0"></span>9</li></ul></div>';
+ assert(ContentLensAdapters.metricCount(tile,'likes')===null);
+ assert(ContentLensAdapters.metricCount(tile,'comments')===null);
+});
+check('Hidden likes remain unknown while a zero comment count remains sortable',()=>{
+ const tile=document.createElement('a');
+ tile.innerHTML='<ul><li><span class="xlsotpv"></span>Hidden</li><li><span class="x100pdo0"></span>0</li></ul>';
+ assert(ContentLensAdapters.metricCount(tile,'likes')===null);
+ assert(ContentLensAdapters.metricCount(tile,'comments')===0);
+});
+check('Likes sort native tiles in both directions, including missing values',()=>{
+ const metrics=[5,null,21,0,10,2];
+ const enriched=model.posts.map((p,i)=>({...p,likes:metrics[i]}));
+ sorter.apply(model,ContentLensCore.selectPosts(enriched,{}, {metric:'likes',direction:'desc'}));
+ assert(visibleOrder()==='C,E,A,F,D,B',visibleOrder());
+ sorter.apply(model,ContentLensCore.selectPosts(enriched,{}, {metric:'likes',direction:'asc'}));
+ assert(visibleOrder()==='D,F,A,E,C,B',visibleOrder()); sorter.reset();
+});
+document.title=document.querySelector('.fail')?'FAIL — Content Lens tests':'PASS — 12 Content Lens browser tests';
+</script></html>

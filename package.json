@@ -1,0 +1,10 @@
+{
+  "name": "content-lens",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Local browser tools for sorting Instagram and TikTok content",
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "check": "node --check extension/core.js && node --check extension/adapters.js && node --check extension/grid.js && node --check extension/styles.js && node --check extension/content.js && node --check extension/options.js"
+  }
+}

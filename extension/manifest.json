@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Content Lens",
+  "version": "0.3.0",
+  "description": "Sort loaded Instagram and TikTok posts, add format tags, and keep your tags on your device.",
+  "permissions": [
+    "storage"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Content Lens"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.instagram.com/*",
+        "https://www.tiktok.com/*"
+      ],
+      "js": [
+        "core.js",
+        "adapters.js",
+        "grid.js",
+        "styles.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
