@@ -64,11 +64,41 @@
       if (!media && views == null) continue;
       if (!anchor.getClientRects().length && !anchor.closest('[data-cl-hidden]')) continue;
       result.set(url, { url, anchor, tile, views, likes: metricCount(tile, 'likes'), comments: metricCount(tile, 'comments'),
+        thumbnail: media?.currentSrc || media?.getAttribute('src') || media?.getAttribute('poster') || (media?.style.backgroundImage || '').match(/^url\(["']?(https:[^"')]+)["']?\)$/)?.[1] || '',
+        creator: new URL(anchor.href, rawUrl).pathname.split('/').filter(Boolean)[0].replace(/^@/, '').replace(/^(?:p|reel)$/, ''),
         type: postType(tile, url), caption: (media?.getAttribute('alt') || tile.querySelector('img[alt]')?.getAttribute('alt') || anchor.getAttribute('title') || anchor.getAttribute('aria-label') || '').slice(0, 1500), order: result.size });
     }
     return [...result.values()];
   }
-  const api = { readTiles, metricCount, contextKey, postType };
+  const embeddedCache = new WeakMap();
+  function readEmbeddedMetrics(document, rawUrl) {
+    if (!new URL(rawUrl).hostname.endsWith('instagram.com')) return [];
+    const records = new Map();
+    for (const script of document.querySelectorAll('script[type="application/json"]')) {
+      const text = script.textContent;
+      if (text.length > 5000000 || !text.includes('like_count') && !text.includes('view_count')) continue;
+      let saved = embeddedCache.get(script);
+      if (!saved || saved.length !== text.length) {
+        const posts = []; let visited = 0;
+        const walk = (value, depth = 0) => {
+          if (!value || typeof value !== 'object' || depth > 80 || ++visited > 100000) return;
+          if (typeof value.code === 'string' && /^[\w-]+$/.test(value.code)) {
+            const post = { url: 'https://www.instagram.com/reel/' + value.code + '/' };
+            for (const [metric, field] of [['views', 'view_count'], ['likes', 'like_count'], ['comments', 'comment_count']]) {
+              post[metric] = Number.isSafeInteger(value[field]) && value[field] >= 0 ? value[field] : null;
+            }
+            if (['views', 'likes', 'comments'].some(key => post[key] != null)) posts.push(post);
+          }
+          for (const child of Object.values(value)) walk(child, depth + 1);
+        };
+        try { walk(JSON.parse(text)); } catch { /* Unrelated or incomplete script. */ }
+        saved = { length: text.length, posts }; embeddedCache.set(script, saved);
+      }
+      for (const post of saved.posts) records.set(post.url, post);
+    }
+    return [...records.values()];
+  }
+  const api = { readTiles, readEmbeddedMetrics, metricCount, contextKey, postType };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ContentLensAdapters = api;
 })(globalThis);

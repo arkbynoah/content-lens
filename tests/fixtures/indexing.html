@@ -1,0 +1,19 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Indexing checks</title>
+<style>body{font:14px system-ui;margin:20px}main{max-width:900px;margin:auto}.row{display:flex}.cell{flex:1}.tile{display:block;height:350px}.cover{height:280px;background:#ddd}.pass{color:green}.fail{color:red}</style>
+<h1>Optional indexing checks</h1><ol id="results"></ol><main><div id="grid"></div></main>
+<script src="../../extension/core.js"></script><script src="../../extension/adapters.js"></script><script src="../../extension/grid.js"></script><script src="../../extension/styles.js"></script>
+<script>
+const scope='https://www.instagram.com/test/saved/study/1/';let ids=0,calls=0,restored=null,data={};
+const originalScope=ContentLensCore.scopeFor;ContentLensCore.scopeFor=url=>originalScope(url)||originalScope(scope);
+const read=ContentLensAdapters.readTiles;ContentLensAdapters.readTiles=doc=>read(doc,scope);
+function row(){const node=document.createElement('div');node.className='row';for(let n=0;n<3;n++){ids++;const cell=document.createElement('div');cell.className='cell';cell.innerHTML='<a class="tile" href="https://www.instagram.com/reel/P'+ids+'/"><div class="cover" style="background-image:linear-gradient(#ddd,#ccc)"></div><span aria-label="'+ids+' views"></span></a>';node.append(cell)}document.getElementById('grid').append(node)}row();
+globalThis.browser={runtime:{getURL:()=> '#library'},storage:{local:{get:async()=>data,set:async changes=>Object.assign(data,changes),remove:async()=>{}},onChanged:{addListener:()=>{}}}};
+window.scrollBy=()=>{calls++;if(calls===1)row()};window.scrollTo=position=>{restored=position};
+function check(name,ok){const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'PASS: ':'FAIL: ')+name;document.getElementById('results').append(li)}
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+</script><script src="../../extension/content.js"></script><script>
+(async()=>{await delay(900);const root=document.getElementById('content-lens-root').shadowRoot;check('No indexing on startup',calls===0);root.querySelector('[data-metric="views"]').click();check('Sort changes do not start indexing',calls===0);
+[...root.querySelectorAll('button')].find(b=>b.textContent==='Index collection').click();await delay(1500);check('Explicit indexing captures newly loaded metadata',Object.keys(data).filter(k=>k.startsWith('library:')).length===6);
+[...root.querySelectorAll('button')].find(b=>b.textContent==='Stop indexing').click();const stopped=calls;await delay(1400);check('Stop cancels subsequent scrolling',calls===stopped);check('Stop restores the starting scroll position',restored?.top===0);check('Sort reapplies after indexing',root.querySelector('[data-metric="views"]').getAttribute('aria-pressed')==='true'&&document.querySelector('[data-cl-grid]'));
+document.title=document.querySelector('.fail')?'FAIL — Indexing':'PASS — 6 indexing checks';})();
+</script></html>

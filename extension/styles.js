@@ -44,5 +44,7 @@ select:hover { background-color:var(--surface); }
 .info-icon { display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; flex:0 0 14px; border:1px solid currentColor; border-radius:50%; font:600 10px/1 Georgia,serif; }
 @media(max-width:650px) { .status-row { gap:8px; } }
 
+.index-progress { position:fixed; z-index:2147483647; bottom:24px; left:50%; transform:translateX(-50%); display:flex; gap:16px; align-items:center; padding:12px 18px; border:1px solid var(--border); border-radius:12px; background:light-dark(#fff,#24212e); box-shadow:0 8px 32px #0005; max-width:90vw; }
+.library-link { color:var(--accent); margin-left:auto; padding:6px 10px; text-underline-offset:3px; }
 .segments button[aria-disabled=true] { opacity:.45; cursor:help; }
 `;

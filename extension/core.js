@@ -45,10 +45,12 @@
     return null;
   }
 
-  function selectPosts(posts, tags, { metric = 'views', direction = 'desc', search = '', format = '', structure = '', type = '' } = {}) {
+  function selectPosts(posts, tags, { metric = 'views', direction = 'desc', search = '', format = '', structure = '', type = '', hints = false } = {}) {
     const query = search.trim().toLowerCase();
     return posts.filter(post => {
-      const tag = tags['tag:' + post.url] || {};
+      const manual = tags['tag:' + post.url] || {};
+      const guessed = hints ? captionHints(post.caption) : {};
+      const tag = { ...manual, format: manual.format || guessed.format, structure: manual.structure || guessed.structure };
       return (!type || post.type === type) && (!format || tag.format === format) && (!structure || tag.structure === structure) &&
         (!query || [post.caption, post.url, tag.notes, tag.format, tag.structure].join(' ').toLowerCase().includes(query));
     }).sort((a, b) => {
@@ -59,6 +61,24 @@
       if (bv == null) return -1;
       return (direction === 'asc' ? av - bv : bv - av) || a.order - b.order;
     });
+  }
+
+  function captionHints(caption = '') {
+    const text = caption.toLowerCase();
+    const structure = /#storytime\b|\bstory time\b|\bwhen i was\b|\byears ago i\b/.test(text) ? 'Storytelling'
+      : /\bstep.by.step\b|\btutorial\b|\bhow to\b/.test(text) ? 'Tutorial'
+      : /\b[3-9] (?:tips|ways|lessons|things)\b/.test(text) ? 'List' : '';
+    const format = /\btalking.head\b/.test(text) ? 'Talking head' : /\bb.roll\b/.test(text) ? 'B-roll + text'
+      : /\bvoice.?over\b/.test(text) ? 'Voiceover' : /\binterview\b/.test(text) ? 'Interview' : '';
+    return { structure, format };
+  }
+  function libraryKey(scope, url) {
+    return 'library:' + encodeURIComponent(scope) + ':' + metricKey(url, 'views');
+  }
+  function libraryRecord(post, scope, label, previous, now = Date.now()) {
+    return { url: post.url, scope, label, caption: (post.caption || previous?.caption || '').slice(0, 1500),
+      type: post.type, thumbnail: post.thumbnail || previous?.thumbnail || '', creator: post.creator || previous?.creator || '',
+      order: previous?.order ?? post.order, firstSeen: previous?.firstSeen || now };
   }
 
   function metricKey(raw, metric) {
@@ -106,7 +126,7 @@
       .map(([key, tag]) => ({ url: key.slice(4), ...cleanTag(tag) })) };
   }
 
-  const api = { formats, structures, parseCount, canonicalPost, scopeFor, selectPosts, metricKey, withRememberedMetrics, cleanTag, validateBackup, makeBackup };
+  const api = { formats, structures, parseCount, canonicalPost, scopeFor, selectPosts, captionHints, libraryKey, libraryRecord, metricKey, withRememberedMetrics, cleanTag, validateBackup, makeBackup };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ContentLensCore = api;
 })(globalThis);

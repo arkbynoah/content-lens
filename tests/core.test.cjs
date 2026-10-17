@@ -78,3 +78,28 @@ test('remembered metrics match the same Instagram post across permalink forms', 
     assert.equal(core.withRememberedMetrics(post,{[core.metricKey(post.url,'views')]:entry},now).views,null);
   }
 });
+
+test('caption clues are optional and manual tags take precedence', () => {
+  const posts = [{ url: 'https://www.instagram.com/reel/A/', caption: 'Story time: when I was in college', order: 0 }];
+  assert.equal(core.selectPosts(posts, {}, { structure: 'Storytelling' }).length, 0);
+  assert.equal(core.selectPosts(posts, {}, { structure: 'Storytelling', hints: true }).length, 1);
+  assert.equal(core.selectPosts(posts, { ['tag:' + posts[0].url]: { structure: 'Tutorial' } }, { structure: 'Storytelling', hints: true }).length, 0);
+  assert.equal(core.captionHints('How to improve your storytelling').structure, 'Tutorial');
+  assert.equal(core.captionHints('An ordinary afternoon').format, '');
+});
+test('library identities isolate collections and metadata updates preserve first indexed order', () => {
+  const post = { url: 'https://www.instagram.com/reel/A/', caption: 'First caption', type: 'video', order: 3 };
+  assert.notEqual(core.libraryKey('collection-one', post.url), core.libraryKey('collection-two', post.url));
+  const first = core.libraryRecord(post, 'collection-one', 'Study', null, 100);
+  const updated = core.libraryRecord({ ...post, caption: 'Updated caption', order: 0 }, 'collection-one', 'Study', first, 200);
+  assert.equal(updated.order, 3); assert.equal(updated.firstSeen, 100); assert.equal(updated.caption, 'Updated caption');
+  assert.equal(updated.anchor, undefined);
+});
+
+test('embedded Instagram metrics keep absent and null views unknown and preserve zero', () => {
+  const adapters = require('../extension/adapters.js');
+  const payload = { data: [{ code: 'A', view_count: null, like_count: 100, comment_count: 0 }, { code: 'B', view_count: 2000 }, { code: 'C', view_count: '100' }] };
+  const document = { querySelectorAll: () => [{ textContent: JSON.stringify(payload) }] };
+  const posts = adapters.readEmbeddedMetrics(document, 'https://www.instagram.com/reels/A/');
+  assert.equal(posts.length, 2); assert.equal(posts[0].views, null); assert.equal(posts[0].comments, 0); assert.equal(posts[1].views, 2000);
+});

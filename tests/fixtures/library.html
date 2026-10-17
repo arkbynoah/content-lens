@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Collection browser · Content Lens</title><link rel="stylesheet" href="../../extension/library.css"></head>
+<body><main>
+<header><div><p class="eyebrow">CONTENT LENS / YOUR LIBRARY</p><h1>Find your next reference.</h1><p class="muted">Search posts you’ve indexed. Open any result on Instagram or TikTok.</p></div><a href="options.html" target="_blank">Back up tags ↗</a></header>
+<section class="controls" aria-label="Collection filters">
+<div class="primary"><label>Collection<select id="collection"></select></label><label class="search">Search captions, creators & notes<input type="search" id="query" placeholder="Try a phrase, topic, or creator…" autofocus></label></div>
+<div class="secondary"><label>Post type<select id="type"><option value="">All types</option><option value="video">Videos / Reels</option><option value="carousel">Carousels / photo sets</option><option value="photo">Photos</option></select></label><label>Presentation<select id="format"></select></label><label>Structure<select id="structure"></select></label><label>Sort by<select id="metric"><option value="order">First indexed</option><option value="views">Most viewed</option><option value="likes">Most liked</option><option value="comments">Most comments</option></select></label><label>Category matching<select id="hints"><option value="">Manual tags only</option><option value="yes">Include caption suggestions</option></select></label><button id="reset">Clear filters</button></div>
+<p class="muted" id="scope-note">Only posts seen while browsing are indexed. This is not a complete or live copy of your saved folder; removed saves can remain here. No videos are downloaded.</p>
+<p class="muted" id="hint-note" hidden>Caption suggestions are rough clues, not video analysis. Manual tags take priority. A video without a tag or caption clue will not match a category.</p>
+</section>
+<div class="results-bar"><p id="status" role="status"></p><nav aria-label="Result pages"><button id="previous">← Previous</button><label class="page-label">Page <input id="page" type="number" min="1" value="1" aria-label="Go to page"></label><span id="pages"></span><button id="next">Next →</button></nav></div>
+<div id="results" class="results"></div><p id="empty" hidden></p>
+<dialog id="editor"><form method="dialog"><h2>Tag this post</h2><label>Presentation<select id="edit-format"></select></label><label>Structure<select id="edit-structure"></select></label><label>Notes<textarea id="notes" maxlength="2000"></textarea></label><p id="error" role="alert"></p><div class="actions"><button value="cancel">Cancel</button><button id="save" value="save">Save tags</button></div></form></dialog>
+</main><script src="../../extension/core.js"></script><script>
+const fixtureScope='https://www.instagram.com/me/saved/study/123/|';
+const fixtureData={};let onChange;
+for(let n=1;n<=60;n++)fixtureData['library:'+n]={url:'https://www.instagram.com/reel/TEST'+n+'/',scope:fixtureScope,label:'Content Study',caption:n%2?'Story time: when I was in college':'How to edit your next video',type:'video',order:n,firstSeen:100};
+fixtureData['library:other']={url:'https://www.instagram.com/reel/OTHER/',scope:'another',label:'Another collection',caption:'Other collection',type:'photo',order:0};
+globalThis.browser={storage:{local:{get:async()=>fixtureData,set:async changes=>{Object.assign(fixtureData,changes)}},onChanged:{addListener:fn=>{onChange=fn}}}};
+location.hash=encodeURIComponent(fixtureScope);
+</script><script src="../../extension/library.js"></script><script>
+setTimeout(async()=>{
+const output=document.createElement('ol');document.querySelector('main').prepend(output);
+function check(name,ok){const li=document.createElement('li');li.textContent=(ok?'PASS: ':'FAIL: ')+name;li.style.color=ok?'green':'red';if(!ok)li.className='fail';output.append(li)}
+const get=id=>document.getElementById(id);const change=(id,value)=>{get(id).value=value;get(id).dispatchEvent(new Event('change'))};
+check('Initial page has only 24 cards and scopes this collection',document.querySelectorAll('.card').length===24&&get('status').textContent.includes('60 indexed'));
+get('next').click();check('Next page changes results without scrolling to the end',document.querySelector('.card a').href.includes('TEST25'));
+change('page','3');check('Jump to page shows the last twelve results',document.querySelectorAll('.card').length===12);
+change('structure','Storytelling');check('Untagged posts do not pretend to be classified',document.querySelectorAll('.card').length===0);
+change('hints','yes');check('Opt-in caption suggestions filter immediately',get('status').textContent.startsWith('30 matches')&&document.querySelector('.labels').textContent.includes('suggested'));
+get('query').value='college';get('query').dispatchEvent(new Event('input'));check('Search combines with categories',get('status').textContent.startsWith('30 matches'));
+get('reset').click();change('metric','views');check('Missing views remain unknown',get('status').textContent.includes('0 with views')&&document.querySelector('.card-body').textContent.includes('No views count available'));
+document.querySelector('.card button').click();change('edit-structure','Tutorial');get('save').click();await new Promise(r=>setTimeout(r,10));check('Tags persist from collection browser',fixtureData['tag:https://www.instagram.com/reel/TEST1/']?.structure==='Tutorial');
+change('collection','another');check('Collection switching does not leak members',document.querySelectorAll('.card').length===1);
+document.title=document.querySelector('.fail')?'FAIL — Library':'PASS — 9 library checks';
+},200);
+</script></body></html>

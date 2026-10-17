@@ -2,7 +2,7 @@
   'use strict';
   const css = `
     [data-cl-ranked] { position:relative!important; }
-[data-cl-grid] { display:grid !important; grid-template-columns:repeat(var(--cl-columns,3),minmax(0,1fr)) !important; gap:3px !important; align-items:start !important; }
+[data-cl-grid] { display:grid !important; grid-template-columns:repeat(var(--cl-columns,3),minmax(0,1fr)) !important; gap:3px !important; align-items:start !important; align-content:start !important; min-height:var(--cl-min-height,0px) !important; }
     [data-cl-row] { display:contents !important; }
     [data-cl-cell] { order:var(--cl-order,0) !important; width:auto !important; min-width:0 !important; max-width:none !important; margin:0 !important; flex:none !important; }
     [data-cl-hidden] { display:none !important; }
@@ -50,8 +50,11 @@
     }
     mark(node, name) { node.setAttribute(name, ''); this.marked.add(node); }
     apply(model, ordered) {
+      const height = model.container.getBoundingClientRect().height;
       this.reset(); this.mark(model.container, 'data-cl-grid');
       model.container.style.setProperty('--cl-columns', model.columns);
+      // Keep the native loading sentinel below its original position when filtering.
+      if (ordered.length < model.posts.length) model.container.style.setProperty('--cl-min-height', height + 'px');
       for (const row of model.rows) this.mark(row, 'data-cl-row');
       const ranks = new Map(ordered.map((post, index) => [post.url, index]));
       for (const post of model.posts) {
@@ -63,7 +66,7 @@
     reset() {
       for (const node of this.marked) {
         for (const attr of ['data-cl-grid', 'data-cl-row', 'data-cl-cell', 'data-cl-hidden']) node.removeAttribute(attr);
-        node.style.removeProperty('--cl-columns'); node.style.removeProperty('--cl-order');
+        node.style.removeProperty('--cl-min-height'); node.style.removeProperty('--cl-columns'); node.style.removeProperty('--cl-order');
       }
       this.marked.clear();
     }

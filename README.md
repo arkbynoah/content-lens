@@ -8,18 +8,40 @@ A local browser extension that sorts the **actual Instagram/TikTok profile grid*
 2. Refresh Instagram/TikTok after installing or reloading the extension.
 3. Open a profile's Reels/videos tab. A compact **Content Lens** toolbar appears immediately above the native posts.
 4. Choose **Views**, **Likes**, or **Comments**, then **High → low** or **Low → high**. The existing tiles visually move into rank order, including pinned reels.
-5. Scroll normally to see more posts. Your selected sort and filters automatically apply as the site adds new tiles; there is no loading screen or automatic scrolling.
+5. Scroll normally to see more posts. Your selected sort and filters automatically apply as the site adds new tiles; filters never start an indexing pass. Optional indexing is described below.
 6. **Reset** restores the site's original order and removes filters.
 
 Instagram likes/comments are read from recognized hover-overlay markup, even when the overlay is not visible. Select **Metric availability** to inspect count coverage. If a metric is missing from every tile, its control explains the limitation and preserves original order. Unknown values stay last; a missing metric never becomes zero. Counts reflect the site's displayed values and may be rounded. The toolbar reports the number of currently loaded native tiles, not a claimed full-account total.
 
-## Saved collections\n\nInstagram Saved supports native post-type, caption, and manual tag filters. When counts are absent, metric controls explain why and tiles are not covered with unavailable labels. Counts observed on other grids within 24 hours can be reused by post identity (including Instagram p/reel link variants). This does not fetch every saved post’s counts.\n\nTikTok Favorites uses its own card adapter and keeps Videos/Favorites/Liked sorting preferences separate even when the address does not change. Only recognizable post cards are collected, not inbox or navigation links.\n\nRun tests/fixtures/saved.html for nine collection-specific browser checks.\n\n## Tags and portability
+## Saved collections
 
-Open **Filters** to choose Videos/Reels, Carousels/photo sets, or Photos; filter manual presentation/structure tags; or search notes and available captions/image descriptions. **Tag posts** adds small Tag buttons to the native tiles. Choose a reel, label it, and save. Presentation and structure are independent: a reel can be both Talking head and Storytelling. Automatic classification is not implemented.
+Instagram Saved supports native post-type, caption, and manual tag filters. When counts are absent, metric controls explain why and tiles are not covered with unavailable labels. Counts observed on other grids within 24 hours can be reused by post identity (including Instagram p/reel link variants). This does not fetch every saved post’s counts.
+
+TikTok Favorites uses its own card adapter and keeps Videos/Favorites/Liked sorting preferences separate even when the address does not change. Only recognizable post cards are collected, not inbox or navigation links.
+
+Run tests/fixtures/saved.html for nine collection-specific browser checks.
+
+## Tags and portability
+
+Open **Filters** to choose Videos/Reels, Carousels/photo sets, or Photos; filter manual presentation/structure tags; or search notes and available captions/image descriptions. **Tag posts** adds small Tag buttons to the native tiles. Choose a reel, label it, and save. Presentation and structure are independent: a reel can be both Talking head and Storytelling. Optional caption suggestions provide rough category clues; they do not analyze video. Manual tags take priority. Unknown categories remain unclassified.
 
 Tags and notes persist locally in the browser. Open **Back up tags** (or the extension popup's backup link), export JSON, and keep it alongside the `extension/` folder. On a new laptop, load that folder and import the backup. Copying source files alone does not copy browser storage; export before uninstalling, which clears local storage.
 
-## Version 0.6: saved collections
+## Version 0.7: collection browser
+
+**Browse collection** opens a separate local library with instant search, collection/type/category filters, 24 results per page, a page-number jump, and tag editing. The existing native sorting toolbar remains in place. Metadata (links, captions, creator names, thumbnail URLs, and collection membership) is indexed as you browse. Thumbnail images load from platform media hosts; videos are not downloaded or uploaded to an AI service.
+
+**Index collection** is an optional, explicit pass for discovering older posts without manually scrolling. It scrolls the source page while showing a small Stop control, records posts as they appear, and restores the starting scroll position. It pauses after two minutes, or after the page stops advancing for eight steps. Another pass can resume from the previous position within this tab session. Filtering never starts indexing, and there is no startup auto-load or blocking loading screen.
+
+The index is an observed snapshot, not a complete or live replica. Platform loading limits, virtualization, and inaccessible posts can prevent full coverage. Removed saves can remain indexed. The library always reports indexed coverage rather than claiming the entire folder is loaded. Currently **tag backups do not include the collection index**; it can be rebuilt by browsing on another device.
+
+Native filters preserve the grid's original minimum height to avoid pulling the platform's loading sentinel upward when posts disappear. Matching native tiles remain together at the top; use the paginated library to avoid browsing the empty area below them.
+
+**Category matching → Include caption suggestions** uses conservative local text rules. Suggestions are explicitly labeled in the library. Captions can discuss storytelling without being a storytelling video, so these are clues rather than reliable classification. Full video/audio analysis is not implemented.
+
+The reader also recognizes numeric `view_count`, `like_count`, and `comment_count` values tied to post codes in Instagram's embedded page JSON. Null values stay unknown. Live inspection of one saved Reel returned likes and comments with `view_count: null`; opening posts is therefore not a reliable way to recover every view count. No background post requests or private endpoints are used.
+
+## Native grid and appearance
 
 Dropdowns reserve space for consistently inset arrows. Metric availability uses a separate icon with an explicit gap and padded hit area. The inline toolbar has direct metric controls, independent sort direction, loaded-post coverage, expandable filters, and rank/count labels on native tiles. The popup and backup screens share its light/dark visual style. Extraction now recognizes Instagram's real `View Count Icon` SVG/title wrapper and background-image thumbnails, while excluding third-party extension icons.
 
@@ -27,7 +49,9 @@ The sorter applies CSS grid order to existing native cells across row wrappers. 
 
 ## Validation
 
-- Ten Node tests cover saved route recognition, post types, metric identity and expiration, plus count parsing, canonical URLs, unknown values, tag filtering, backup validation, route scoping, and manifest files.
+Version 0.7: 13 Node checks, 9 collection browser checks, 6 indexing checks, 12 native browsing checks, and 9 saved-collection checks pass. Live Chrome validation indexed 144 Content Study posts across Instagram’s changing live grid, restored the source position after stopping, opened the local library through the extension worker, and returned 15 immediate caption-search matches for “storytelling”. These matches are text search, not confirmed video classifications. The library showed six pages of results with working thumbnail previews. This turn did not revalidate TikTok live.
+
+- Thirteen Node tests cover caption hints, index identity, and saved route recognition, post types, metric identity and expiration, plus count parsing, canonical URLs, unknown values, tag filtering, backup validation, route scoping, and manifest files.
 - Twelve browser regression checks cover observed Instagram markup, native cross-row sorting, original node identity, ascending/unknown/zero behavior, filtering without blank slots, reset, appended rows, Instagram’s unlabeled likes/comments sprites, unrelated counters, hidden likes, and bidirectional likes sorting.
 - Browser integration checks in tests/fixtures/browsing.html exercise automatic sorting/filtering of newly added tiles, immediate controls, no startup scrolling, reset, and preserved dropdown/icon spacing.
 - Live Chrome validation on `@swerikcodes/reels/`: view extraction and native visual ranking verified. First row after Most viewed was **3M, 1M, 717K, 665K**. Likes sorted **55.5K, 29.5K, 19.4K, 14.9K** across the first row. Comments and ascending direction were verified; one missing count remained last. Scrolling appended posts and reapplied sorting.
@@ -40,17 +64,17 @@ npm test
 npm run check
 ```
 
-Open `tests/fixtures/native-grid.html` in Chrome for DOM/layout regression tests. No external dependencies are needed.
+Open `tests/fixtures/library.html` for nine library checks, `tests/fixtures/browsing.html` for twelve browsing checks, and `tests/fixtures/native-grid.html` in Chrome for DOM/layout regression tests. No external dependencies are needed.
 
 ## Limits / next work
 
-- Sorts currently loaded native tiles only; the platform may limit or virtualize the accessible list. Sorting and filters reapply as you scroll and the site adds tiles. A newly loaded popular post may move above earlier ones. The extension does not preload posts or move the page for collection.
+- Sorts currently loaded native tiles only; the platform may limit or virtualize the accessible list. Sorting and filters reapply as you scroll and the site adds tiles. A newly loaded popular post may move above earlier ones. Only the optional Index collection action moves the page to discover posts.
 - English labels and English number abbreviations are supported initially.
 - Some likes/comments are absent from the grid or intentionally hidden. The Instagram sprite selectors are guarded against unrelated lists but may need updates when Instagram changes its markup. These are not fetched from private endpoints.
 - Creator insights, followers gained per reel, reach, watch time, and automatic video classification remain unimplemented. Instagram Saved often omits counts entirely. No ranking is invented when a metric is missing.
 - Site layout changes can require adapter updates. Unsupported grid structures are left alone.
 - CSS visual sorting preserves DOM order, so screen-reader reading order can differ from visual rank. Native keyboard/screen-reader sorting needs further work.
-- No account cookies, credentials, media files, or private network APIs are accessed. Post tags/notes and recently observed public counts are stored locally. Metric records expire after 24 hours, are marked ≈ when reused, and are excluded from tag backups. They are collected from grids you browse; there is no background scraping or auto-load.
+- No account cookies, credentials, media files, or private network APIs are accessed. Tags, notes, the collection index, and recently observed counts are stored locally. Metric records expire after 24 hours, are marked ≈ when reused, and are excluded from tag backups. They are collected from grids you browse; there are no background post requests or startup auto-load.
 
 ## Browsers
 

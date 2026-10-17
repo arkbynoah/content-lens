@@ -25,7 +25,9 @@ function visibleOrder(){return [...container.querySelectorAll('a')].filter(a=>a.
  root.querySelector('[data-metric="views"]').click();
  check('Sorting is available immediately',visibleOrder()==='P3,P2,P1');
  const format=root.querySelector('[aria-label="Filter presentation tags"]');
+ const heightBefore=container.getBoundingClientRect().height;
  format.value='Talking head';format.dispatchEvent(new Event('change'));
+ check('Filtering preserves the loading sentinel position',container.getBoundingClientRect().height >= heightBefore);
  check('Existing manual tags filter the native grid',visibleOrder()==='P2');
  row();await delay(650);
  check('New posts automatically join active sorting and filtering',visibleOrder()==='P5,P2');
@@ -39,6 +41,6 @@ function visibleOrder(){return [...container.querySelectorAll('a')].filter(a=>a.
  check('Dropdown arrow spacing is preserved',parseFloat(style.paddingRight)>=36&&style.backgroundImage.includes('svg'));
  const infoStyle=getComputedStyle(root.querySelector('.text-button'));
  check('Metric icon spacing is preserved',parseFloat(infoStyle.gap)>=8&&parseFloat(infoStyle.paddingLeft)>=10);
- document.title=document.querySelector('.fail')?'FAIL — Browse integration':'PASS — 11 browsing checks';
+ document.title=document.querySelector('.fail')?'FAIL — Browse integration':'PASS — 12 browsing checks';
 })();
 </script></html>
