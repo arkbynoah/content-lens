@@ -15,10 +15,10 @@ test('stop or route change interrupts within one poll without another scroll', a
   assert.equal(result.reason, 'stopped');
   assert.equal(scrolls, 1);
 });
-test('virtualized tiles with equal counts but new URLs count as progress', async () => {
+test('virtualized tiles stop loading instead of claiming a complete collection', async () => {
   let rounds = 0;
   const result = await collect({ ...defaults, sample: () => ['post-' + rounds], step: () => rounds++, maxRounds: 4 });
-  assert.deepEqual(result, { reason: 'limit', count: 5 });
+  assert.deepEqual(result, { reason: 'virtualized', count: 1 });
 });
 test('late batches get a full wait window and duplicate IDs do not count twice', async () => {
   let polls = 0, ids = ['a'];

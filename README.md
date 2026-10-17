@@ -44,7 +44,7 @@ Open `tests/fixtures/native-grid.html` in Chrome for DOM/layout regression tests
 
 ## Limits / next work
 
-- Sorts currently loaded native tiles only; the platform may limit or virtualize the accessible list. Auto-load uses native page scrolling behind a cancellable progress screen, without private endpoints. It stops after three idle rounds (about nine seconds), 60 rounds (about three minutes), navigation, tab hiding, or cancellation. This is not proof every account post is available. The preference is saved locally and can be disabled; a route is attempted once per page session.
+- Sorts currently loaded native tiles only; the platform may limit or virtualize the accessible list. Auto-load uses native page scrolling behind a cancellable progress screen, without private endpoints. It stops after three idle rounds (about nine seconds), 60 rounds (about three minutes), navigation, tab hiding, cancellation, or detecting previously loaded URLs leaving the native grid. This is not proof every account post is available. The preference is saved locally and can be disabled; a route is attempted once per page session.
 - English labels and English number abbreviations are supported initially.
 - Some likes/comments are absent from the grid or intentionally hidden. The Instagram sprite selectors are guarded against unrelated lists but may need updates when Instagram changes its markup. These are not fetched from private endpoints.
 - Creator insights, followers gained per reel, reach, watch time, automatic video classification, and a verified saved-collections integration remain unimplemented.

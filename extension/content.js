@@ -187,7 +187,8 @@
         }
       });
       if (location.pathname === run.route) {
-        loadMessage = result.reason === 'idle' ? 'No more posts appeared. You can retry loading if posts are missing.'
+        loadMessage = result.reason === 'virtualized' ? 'The site is unloading earlier tiles. Sorting is limited to posts currently in the grid.'
+          : result.reason === 'idle' ? 'No more posts appeared. You can retry loading if posts are missing.'
           : result.reason === 'limit' ? 'Loading paused after 60 batches. Continue with “Load remaining posts”.'
           : 'Loading paused. Browse these posts or load the rest when you’re ready.';
       }
