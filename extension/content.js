@@ -13,6 +13,8 @@
   function label(text, input) { const node = el('label', text); node.append(input); return node; }
   let model = null, tags = {}, route = location.pathname, timer = null, loading = false, tagMode = false, editPost = null;
   const routePreferences = new Map();
+  let autoLoad = true, settingsReady = false, loadRun = null, autoTimer = null, loadMessage = '';
+  const attemptedRoutes = new Set();
   const badgeHosts = new Set();
   const shell = el('section', '', 'shell'); shell.setAttribute('aria-label', 'Content Lens');
   const bar = el('div', '', 'bar');
@@ -26,14 +28,33 @@
     metricButtons.set(option.value, control); sortGroup.append(control);
   }
   const directionControl = select([['desc', 'High → low'], ['asc', 'Low → high']], 'Sort direction'); directionControl.className = 'direction';
-  const more = button('Load more posts ↓', loadMore); more.className = 'load-more';
+  const more = button('Load remaining posts', loadMore); more.className = 'load-more';
   const tagsButton = button('Filters', () => { filters.hidden = !filters.hidden; tagsButton.setAttribute('aria-expanded', String(!filters.hidden)); });
   tagsButton.setAttribute('aria-expanded', 'false'); tagsButton.setAttribute('aria-controls', 'filters');
   const reset = button('Reset', () => { sort.value = 'order'; directionControl.value = 'desc'; format.value = ''; structure.value = ''; search.value = ''; tagMode = false; editPost = null; editor.hidden = true; tagButton.textContent = 'Tag posts'; scan(); }); reset.className = 'quiet';
   const count = el('span', '', 'count'); count.setAttribute('role', 'status');
-  const coverage = button('Metric availability ⓘ', () => { metricsPanel.hidden = !metricsPanel.hidden; coverage.setAttribute('aria-expanded', String(!metricsPanel.hidden)); }); coverage.className = 'text-button'; coverage.setAttribute('aria-expanded', 'false'); coverage.setAttribute('aria-controls', 'metrics');
+  const coverage = button('', () => { metricsPanel.hidden = !metricsPanel.hidden; coverage.setAttribute('aria-expanded', String(!metricsPanel.hidden)); }); coverage.className = 'text-button'; coverage.setAttribute('aria-expanded', 'false'); coverage.setAttribute('aria-controls', 'metrics');
+  const coverageText = el('span', 'Metric availability');
+  const infoIcon = el('span', 'i', 'info-icon'); infoIcon.setAttribute('aria-hidden', 'true'); coverage.append(coverageText, infoIcon);
   bar.append(brand, sort, sortGroup, directionControl, tagsButton, reset);
-  const statusRow = el('div', '', 'status-row'); statusRow.append(count, coverage, more);
+  const statusRow = el('div', '', 'status-row'); const autoButton = button('Auto-load on', async () => {
+    autoLoad = !autoLoad; updateAutoButton();
+    try { await api.storage.local.set({ 'settings:autoLoad': autoLoad }); } catch { showNote('Could not save the auto-load preference.'); }
+    if (!autoLoad) { clearTimeout(autoTimer); autoTimer = null; }
+    else { attemptedRoutes.delete(route); scan(); }
+  }); autoButton.className = 'auto-load'; autoButton.title = 'Automatically prepare posts when opening a profile';
+  statusRow.append(count, coverage, autoButton, more);
+  const loadStatus = el('div', '', 'load-status'); loadStatus.hidden = true; loadStatus.setAttribute('role', 'status');
+  const loadingDialog = el('dialog', '', 'loading-dialog');
+  loadingDialog.setAttribute('aria-labelledby', 'load-heading'); loadingDialog.setAttribute('aria-describedby', 'load-detail');
+  const loadingCard = el('div', '', 'loading-card');
+  const loadingHeading = el('h2', 'Preparing your posts'); loadingHeading.id = 'load-heading';
+  const loadingCount = el('div', '', 'loading-count'); loadingCount.setAttribute('role', 'status');
+  const loadingDetail = el('p', 'Loading this profile’s available posts. Start browsing whenever you’re ready.'); loadingDetail.id = 'load-detail';
+  const stopLoading = button('Browse loaded posts', () => { if (loadRun) loadRun.cancelled = true; }); stopLoading.className = 'browse-posts';
+  loadingDialog.addEventListener('cancel', event => { event.preventDefault(); if (loadRun) loadRun.cancelled = true; });
+  loadingCard.append(el('span', '↕', 'loading-mark'), loadingHeading, loadingCount, loadingDetail, stopLoading, el('p', 'Your place on the page will be restored.', 'muted'));
+  loadingDialog.append(loadingCard);
   const metricsPanel = el('div', '', 'panel metrics'); metricsPanel.id = 'metrics'; metricsPanel.hidden = true;
   const metricRows = el('div', '', 'metric-rows');
   metricsPanel.append(el('strong', 'What can I sort?'), metricRows, el('p', 'Counts come from the loaded page, including Instagram’s hover overlays. Unavailable counts stay last; rounded counts may tie.'), el('p', 'Followers gained, saves, shares, reach, and watch time are not connected in this version. Creator insights support is a separate integration.'));
@@ -62,18 +83,26 @@
     finally { save.disabled = false; }
   });
   editor.append(label('Presentation', presentation), label('Structure', narrative), label('Notes', notes), save, button('Cancel', () => { editor.hidden = true; editPost = null; }));
-  shell.append(bar, statusRow, note, metricsPanel, filters, editor); shadow.append(shell);
-  shadow.addEventListener('keydown', event => { if (event.key === 'Escape') { editor.hidden = true; filters.hidden = true; metricsPanel.hidden = true; tagsButton.setAttribute('aria-expanded', 'false'); coverage.setAttribute('aria-expanded', 'false'); tagMode = false; tagButton.textContent = 'Tag posts'; syncBadges(); tagsButton.focus(); } });
+  shell.append(bar, statusRow, loadStatus, note, metricsPanel, filters, editor); shadow.append(shell, loadingDialog);
+  shadow.addEventListener('keydown', event => { if (event.key === 'Escape' && !loading) { editor.hidden = true; filters.hidden = true; metricsPanel.hidden = true; tagsButton.setAttribute('aria-expanded', 'false'); coverage.setAttribute('aria-expanded', 'false'); tagMode = false; tagButton.textContent = 'Tag posts'; syncBadges(); tagsButton.focus(); } });
   for (const control of [sort, directionControl, format, structure]) control.addEventListener('change', scan);
   search.addEventListener('input', schedule);
   function showNote(text) { note.textContent = text; note.hidden = !text; }
+  function updateAutoButton() { autoButton.textContent = autoLoad ? 'Auto-load on' : 'Auto-load off'; autoButton.setAttribute('aria-pressed', String(autoLoad)); }
+  function maybeAutoLoad() {
+    if (!settingsReady || !autoLoad || loading || autoTimer || attemptedRoutes.has(route) || document.hidden) return;
+    const startingRoute = route;
+    autoTimer = setTimeout(() => { autoTimer = null; if (route === startingRoute && autoLoad && model && !document.hidden) loadMore(); }, 900);
+  }
   function scan() {
     clearTimeout(timer); timer = null;
     if (route !== location.pathname) {
+      if (loadRun) loadRun.cancelled = true;
+      clearTimeout(autoTimer); autoTimer = null; loadMessage = '';
       routePreferences.set(route, { sort: sort.value, direction: directionControl.value, format: format.value, structure: structure.value, search: search.value });
       route = location.pathname;
       const previous = routePreferences.get(route);
-      sort.value = previous?.sort || 'order'; directionControl.value = previous?.direction || 'desc'; format.value = previous?.format || ''; structure.value = previous?.structure || ''; search.value = previous?.search || ''; tagMode = false; loading = false;
+      sort.value = previous?.sort || 'order'; directionControl.value = previous?.direction || 'desc'; format.value = previous?.format || ''; structure.value = previous?.structure || ''; search.value = previous?.search || ''; tagMode = false;
       editor.hidden = true; editPost = null; host.remove();
     }
     grid.reset();
@@ -92,27 +121,29 @@
     metricRows.replaceChildren(...Object.entries(available).map(([key, total]) => { const row = el('div', '', 'metric-row'); row.append(el('span', key[0].toUpperCase() + key.slice(1)), el('span', total ? total + ' of ' + posts.length + ' posts' : 'Not exposed on this page')); return row; }));
     const selected = core.selectPosts(model.posts, tags, { metric, direction, format: format.value, structure: structure.value, search: search.value });
     const active = metric !== 'order' || format.value || structure.value || search.value.trim();
-    if (active) grid.apply(model, selected);
+    if (active && !loading) grid.apply(model, selected);
     const known = posts.filter(post => post[metric] != null).length;
     count.textContent = selected.length === posts.length ? `${posts.length} posts loaded` : `${selected.length} / ${posts.length} shown`;
     const numFilters = Number(!!format.value) + Number(!!structure.value) + Number(!!search.value.trim());
     reset.hidden = !active && !tagMode; clearFilters.hidden = !numFilters;
     tagsButton.textContent = numFilters ? 'Filters · ' + numFilters : 'Filters';
-    coverage.textContent = metric === 'order' ? 'Metric availability ⓘ' : known + '/' + posts.length + ' with ' + metric + ' ⓘ';
+    coverageText.textContent = metric === 'order' ? 'Metric availability' : known + '/' + posts.length + ' with ' + metric;
     if (metric !== 'order' && !known) showNote('No ' + metric + ' counts are exposed on these tiles yet. Try hovering over posts or choose another metric. Original order is preserved.');
     else if (metric !== 'order' && known < posts.length) showNote((posts.length - known) + (posts.length - known === 1 ? ' post has' : ' posts have') + ' unavailable ' + metric + ' counts and ' + (posts.length - known === 1 ? 'appears' : 'appear') + ' last. Load more to include older posts.');
     else if (!selected.length) showNote('No matching tags. Use “Tag posts” to label videos, or Reset to show everything.');
     else if (metric !== 'order') showNote('');
     else showNote('');
     tagButton.setAttribute('aria-pressed', String(tagMode));
-    syncBadges();
+    loadStatus.textContent = loadMessage; loadStatus.hidden = !loadMessage;
+    loadingCount.textContent = posts.length + ' posts ready';
+    updateAutoButton(); syncBadges(); maybeAutoLoad();
   }
   function schedule() { if (!timer) timer = setTimeout(scan, 350); }
   function clearBadges() { for (const node of badgeHosts) { node.parentElement?.removeAttribute('data-cl-ranked'); node.remove(); } badgeHosts.clear(); }
   function syncBadges() {
     clearBadges();
     const metric = sort.value.split(':')[0];
-    if (!model || (!tagMode && metric === 'order')) return;
+    if (loading || !model || (!tagMode && metric === 'order')) return;
     const ranked = core.selectPosts(model.posts, tags, { metric, direction: directionControl.value, format: format.value, structure: structure.value, search: search.value });
     for (const [index, post] of ranked.entries()) {
       const badge = document.createElement('span'); badge.dataset.clTag = '';
@@ -137,16 +168,40 @@
     }
   }
   async function loadMore() {
-    if (loading || !model) return;
-    loading = true; more.disabled = true; more.textContent = 'Loading…';
-    const start = model.posts.length, initialRoute = route;
-    model.container.scrollIntoView({ block: 'end', behavior: 'smooth' });
-    await new Promise(resolve => setTimeout(resolve, 2200));
-    if (route === initialRoute) {
-      scan(); host.scrollIntoView({ block: 'start', behavior: 'smooth' });
-      if (model && model.posts.length <= start) showNote('No additional posts loaded. The page may be at its end; scroll manually if Instagram is still loading.');
+    if (loading || !model || document.hidden || route !== location.pathname) return;
+    clearTimeout(autoTimer); autoTimer = null;
+    const run = { route, cancelled: false, x: window.scrollX, y: window.scrollY };
+    loadRun = run; attemptedRoutes.add(route); loading = true; loadMessage = '';
+    more.disabled = true;
+    try {
+      loadingDialog.showModal(); stopLoading.focus({ preventScroll: true });
+      scan();
+      const result = await globalThis.ContentLensLoader.collect({
+        sample: () => adapters.readTiles(document, location.href).map(post => post.url),
+        active: () => !run.cancelled && location.pathname === run.route && !document.hidden,
+        wait: ms => new Promise(resolve => setTimeout(resolve, ms)),
+        progress: () => { loadingCount.textContent = (model?.posts.length || 0) + ' posts ready'; },
+        step: () => {
+          if (model?.container.isConnected) model.container.scrollIntoView({ block: 'end', behavior: 'instant' });
+          window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'instant' });
+        }
+      });
+      if (location.pathname === run.route) {
+        loadMessage = result.reason === 'idle' ? 'No more posts appeared. You can retry loading if posts are missing.'
+          : result.reason === 'limit' ? 'Loading paused after 60 batches. Continue with “Load remaining posts”.'
+          : 'Loading paused. Browse these posts or load the rest when you’re ready.';
+      }
+    } catch {
+      if (location.pathname === run.route) loadMessage = 'Loading paused. You can retry with “Load remaining posts”.';
+    } finally {
+      loading = false; loadRun = null; more.disabled = false;
+      if (loadingDialog.open) loadingDialog.close();
+      scan();
+      if (location.pathname === run.route) {
+        window.scrollTo({ left: run.x, top: run.y, behavior: 'instant' });
+        more.focus({ preventScroll: true });
+      }
     }
-    loading = false; more.disabled = false; more.textContent = 'Load more posts ↓';
   }
   const observer = new MutationObserver(records => {
     if (records.some(record => !host.contains(record.target) && !record.target.parentElement?.closest?.('[data-cl-tag]') &&
@@ -154,10 +209,15 @@
   });
   observer.observe(document.body, { childList: true, characterData: true, subtree: true });
   window.addEventListener('resize', schedule);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && loadRun) loadRun.cancelled = true;
+    if (!document.hidden) schedule();
+  });
   setInterval(() => { if (route !== location.pathname || !host.isConnected) schedule(); }, 1000);
-  api.storage.local.get(null).then(data => { tags = data; scan(); }).catch(() => scan());
+  api.storage.local.get(null).then(data => { tags = data; autoLoad = data['settings:autoLoad'] !== false; settingsReady = true; scan(); }).catch(() => { settingsReady = true; scan(); });
   api.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
+    if (changes['settings:autoLoad']) { autoLoad = changes['settings:autoLoad'].newValue !== false; updateAutoButton(); }
     for (const [key, change] of Object.entries(changes)) if (key.startsWith('tag:')) { if (change.newValue) tags[key] = change.newValue; else delete tags[key]; }
     scan();
   });

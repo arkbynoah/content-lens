@@ -1,0 +1,43 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Loading integration tests</title>
+<style>body{margin:30px;font:14px system-ui;background:#111;color:white}main{max-width:900px;margin:180px auto}.grid{display:flex;flex-direction:column}.row{display:flex}.cell{flex:1}.tile{display:block;position:relative;height:350px;color:white}.cover{height:280px;background:#333}.pass{color:#9fe8ae}.fail{color:#ff9999}</style>
+<h1>Automatic loading integration tests</h1><ol id="results"></ol><main><div class="grid" id="grid"></div></main>
+<script src="../../extension/core.js"></script><script src="../../extension/adapters.js"></script><script src="../../extension/grid.js"></script><script src="../../extension/styles.js"></script><script src="../../extension/loader.js"></script>
+<script>
+let batches=0,runs=0,ids=0,storage={};
+const list=document.querySelector('#results'),container=document.querySelector('#grid');
+function row(){const node=document.createElement('div');node.className='row';node.innerHTML=[1,2,3].map(()=>'<div class="cell"><a class="tile" href="https://www.instagram.com/test/reel/P'+(++ids)+'/"><div class="cover" style="background-image:linear-gradient(#333,#444)"></div><span aria-label="'+ids+' views"></span></a></div>').join('');container.append(node);}
+row();
+const read=ContentLensAdapters.readTiles;ContentLensAdapters.readTiles=(doc)=>read(doc,'https://www.instagram.com/test/reels/');
+globalThis.browser={runtime:{getURL:()=> '#backup'},storage:{local:{get:async()=>storage,set:async value=>Object.assign(storage,value)},onChanged:{addListener:()=>{}}}};
+const collect=ContentLensLoader.collect;
+ContentLensLoader.collect=options=>{runs++;return collect({...options,wait:()=>new Promise(r=>setTimeout(r,20)),step:async()=>{await options.step();if(batches++<2)row();}});};
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+function check(name,ok){const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'PASS: ':'FAIL: ')+name;list.append(li);}
+</script>
+<script src="../../extension/content.js"></script>
+<script>
+(async()=>{
+ window.scrollTo(0,80);const initial=window.scrollY;
+ await delay(1100);
+ const root=document.querySelector('#content-lens-root').shadowRoot;
+ check('Auto-load starts without a click',root.querySelector('dialog').open && runs===1);
+ await delay(1500);
+ check('Batches expand the native grid',container.querySelectorAll('a').length===9);
+ check('Idle completion closes loading screen',!root.querySelector('dialog').open);
+ check('Original scroll position is restored',Math.abs(window.scrollY-initial)<3);
+ check('Loaded coverage updates',root.querySelector('.count').textContent==='9 posts loaded');
+ await delay(1100);
+ check('Auto-load does not restart on its own DOM updates',runs===1);
+ root.querySelector('.load-more').click();
+ await delay(50);root.querySelector('.browse-posts').click();await delay(100);
+ check('Cancel closes the screen and enables retry',!root.querySelector('dialog').open&&!root.querySelector('.load-more').disabled);
+ check('Manual retry starts another run',runs===2);
+ root.querySelector('.auto-load').click();await delay(30);
+ check('Auto-load off persists locally',storage['settings:autoLoad']===false);
+ const direction=root.querySelector('.direction'),style=getComputedStyle(direction);
+ check('Dropdown reserves room for its inset arrow',parseFloat(style.paddingRight)>=36&&style.backgroundImage.includes('svg'));
+ const infoStyle=getComputedStyle(root.querySelector('.text-button'));
+ check('Metric icon has deliberate spacing and padding',parseFloat(infoStyle.gap)>=8&&parseFloat(infoStyle.paddingLeft)>=10);
+ document.title=document.querySelector('.fail')?'FAIL — Loading integration':'PASS — 11 loading and spacing checks';
+})();
+</script></html>
