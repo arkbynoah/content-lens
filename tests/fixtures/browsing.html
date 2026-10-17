@@ -1,0 +1,44 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Browse integration tests</title>
+<style>body{margin:30px;font:14px system-ui;background:#111;color:white}main{max-width:900px;margin:180px auto}.grid{display:flex;flex-direction:column}.row{display:flex}.cell{flex:1}.tile{display:block;position:relative;height:350px;color:white}.cover{height:280px;background:#333}.pass{color:#9fe8ae}.fail{color:#ff9999}</style>
+<h1>Browse-as-you-scroll integration tests</h1><ol id="results"></ol><main><div class="grid" id="grid"></div></main>
+<script src="../../extension/core.js"></script><script src="../../extension/adapters.js"></script><script src="../../extension/grid.js"></script><script src="../../extension/styles.js"></script>
+<script>
+let ids=0,scrollCalls=0;
+const list=document.querySelector('#results'),container=document.querySelector('#grid');
+function row(){const node=document.createElement('div');node.className='row';node.innerHTML=[1,2,3].map(()=>'<div class="cell"><a class="tile" href="https://www.instagram.com/test/reel/P'+(++ids)+'/"><div class="cover" style="background-image:linear-gradient(#333,#444)"></div><span aria-label="'+ids+' views"></span></a></div>').join('');container.append(node);}
+row();
+const read=ContentLensAdapters.readTiles;ContentLensAdapters.readTiles=doc=>read(doc,'https://www.instagram.com/test/reels/');
+globalThis.browser={runtime:{getURL:()=> '#backup'},storage:{local:{get:async()=>({'settings:autoLoad':true,'tag:https://www.instagram.com/reel/P2/':{format:'Talking head'},'tag:https://www.instagram.com/reel/P5/':{format:'Talking head'}})},onChanged:{addListener:()=>{}}}};
+const nativeScroll=window.scrollTo;window.scrollTo=(...args)=>{scrollCalls++;nativeScroll.apply(window,args)};
+const nativeInto=Element.prototype.scrollIntoView;Element.prototype.scrollIntoView=function(...args){scrollCalls++;nativeInto.apply(this,args)};
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+function check(name,ok){const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'PASS: ':'FAIL: ')+name;list.append(li);}
+function visibleOrder(){return [...container.querySelectorAll('a')].filter(a=>a.getClientRects().length).sort((a,b)=>{const x=a.getBoundingClientRect(),y=b.getBoundingClientRect();return Math.abs(x.top-y.top)>3?x.top-y.top:x.left-y.left}).map(a=>a.href.split('/').at(-2)).join(',');}
+</script>
+<script src="../../extension/content.js"></script>
+<script>
+(async()=>{
+ await delay(1200);
+ const root=document.querySelector('#content-lens-root').shadowRoot;
+ check('No loader controls or loading screen, even with an old saved preference',!root.querySelector('dialog,.auto-load,.load-more'));
+ check('Startup does not scroll the page',scrollCalls===0);
+ root.querySelector('[data-metric="views"]').click();
+ check('Sorting is available immediately',visibleOrder()==='P3,P2,P1');
+ const format=root.querySelector('[aria-label="Filter presentation tags"]');
+ format.value='Talking head';format.dispatchEvent(new Event('change'));
+ check('Existing manual tags filter the native grid',visibleOrder()==='P2');
+ row();await delay(650);
+ check('New posts automatically join active sorting and filtering',visibleOrder()==='P5,P2');
+ check('Coverage updates as native posts arrive',root.querySelector('.count').textContent==='2 / 6 shown');
+ const direction=root.querySelector('.direction');direction.value='asc';direction.dispatchEvent(new Event('change'));
+ check('Sort direction still applies with filters',visibleOrder()==='P2,P5');
+ root.querySelector('.bar .quiet').click();
+ check('Reset restores all native posts',visibleOrder()==='P1,P2,P3,P4,P5,P6');
+ check('Browsing updates never trigger programmatic scrolling',scrollCalls===0);
+ const style=getComputedStyle(direction);
+ check('Dropdown arrow spacing is preserved',parseFloat(style.paddingRight)>=36&&style.backgroundImage.includes('svg'));
+ const infoStyle=getComputedStyle(root.querySelector('.text-button'));
+ check('Metric icon spacing is preserved',parseFloat(infoStyle.gap)>=8&&parseFloat(infoStyle.paddingLeft)>=10);
+ document.title=document.querySelector('.fail')?'FAIL — Browse integration':'PASS — 11 browsing checks';
+})();
+</script></html>
