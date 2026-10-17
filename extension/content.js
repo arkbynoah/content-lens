@@ -60,14 +60,31 @@
   const structure = select([['', 'All structures'], ...core.structures.map(x => [x, x])], 'Filter structure tags');
   const postType = select([['', 'All post types'], ['video', 'Videos / Reels'], ['carousel', 'Carousels / photo sets'], ['photo', 'Photos']], 'Filter post type');
   const search = el('input'); search.type = 'search'; search.placeholder = 'Search captions or your notes'; search.setAttribute('aria-label', 'Search notes and available captions');
-  const tagButton = button('Tag posts', () => { tagMode = !tagMode; tagButton.textContent = tagMode ? 'Done tagging' : 'Tag posts'; tagButton.setAttribute('aria-pressed', String(tagMode)); scan(); });
+  const tagButton = button('Tag posts', () => {
+    tagMode = !tagMode;
+    if (tagMode) { format.value = ''; structure.value = ''; search.value = ''; }
+    tagButton.textContent = tagMode ? 'Done tagging' : 'Tag posts'; tagButton.setAttribute('aria-pressed', String(tagMode)); scan();
+  });
   const backup = el('a', 'Back up tags ↗'); backup.href = api.runtime.getURL('options.html'); backup.target = '_blank'; backup.rel = 'noopener';
   backup.addEventListener('click', event => { event.preventDefault(); openExtensionPage('open-options'); });
-  fields.append(label('Post type', postType), label('Presentation', format), label('Structure', structure), label('Search notes or captions', search));
+  fields.append(label('Post type', postType), label('Presentation tags', format), label('Structure tags', structure), label('Search notes or captions', search));
   const filterActions = el('div', '', 'panel-actions');
   const clearFilters = button('Clear filters', () => { format.value = ''; structure.value = ''; postType.value = ''; search.value = ''; scan(); }); clearFilters.className = 'quiet';
   const hintMode = select([['', 'Manual tags only'], ['yes', 'Include caption suggestions']], 'Category matching');
-  filterActions.append(label('Category matching', hintMode), tagButton, clearFilters, backup); filters.append(filterHeading, fields, filterActions);
+  const categoryField = label('Category matching', hintMode); categoryField.className = 'category-field';
+  const actionButtons = el('div', '', 'filter-buttons'); actionButtons.append(tagButton, clearFilters, backup);
+  filterActions.append(categoryField, actionButtons); filters.append(filterHeading, fields, filterActions);
+  const resultHelp = el('p', '', 'result-help'); resultHelp.hidden = true;
+  const emptyHost = el('div'); emptyHost.dataset.clEmpty = '';
+  const emptyRoot = emptyHost.attachShadow({ mode: 'open' });
+  const emptyStyle = el('style'); emptyStyle.textContent = globalThis.ContentLensStyles;
+  const emptyBox = el('section', '', 'empty-results'); emptyBox.setAttribute('role', 'status');
+  const emptyTitle = el('strong'), emptyText = el('p'), emptyActions = el('div', '', 'empty-actions');
+  const useHints = button('Try caption suggestions', () => { hintMode.value = 'yes'; scan(); });
+  const clearCategories = button('Clear category filters', () => { format.value = ''; structure.value = ''; scan(); });
+  const tagEmpty = button('Tag loaded posts', () => { format.value = ''; structure.value = ''; search.value = ''; tagMode = true; tagButton.textContent = 'Done tagging'; scan(); });
+  emptyActions.append(clearCategories, useHints, tagEmpty, button('Clear all filters', () => clearFilters.click()), button('Browse indexed posts ↗', () => openExtensionPage('open-library')));
+  emptyBox.append(emptyTitle, emptyText, emptyActions); emptyRoot.append(emptyStyle, emptyBox);
   const editor = el('div', '', 'panel editor'); editor.hidden = true;
   const presentation = select([['', 'Not tagged'], ...core.formats.map(x => [x, x])], 'Presentation for selected reel');
   const narrative = select([['', 'Not tagged'], ...core.structures.map(x => [x, x])], 'Structure for selected reel');
@@ -80,7 +97,7 @@
     finally { save.disabled = false; }
   });
   editor.append(label('Presentation', presentation), label('Structure', narrative), label('Notes', notes), save, button('Cancel', () => { editor.hidden = true; editPost = null; }));
-  shell.append(bar, statusRow, note, cacheNote, metricsPanel, filters, editor); shadow.append(shell);
+  shell.append(bar, statusRow, note, cacheNote, metricsPanel, filters, editor, resultHelp); shadow.append(shell);
   shadow.addEventListener('keydown', event => { if (event.key === 'Escape') { editor.hidden = true; filters.hidden = true; metricsPanel.hidden = true; tagsButton.setAttribute('aria-expanded', 'false'); coverage.setAttribute('aria-expanded', 'false'); tagMode = false; tagButton.textContent = 'Tag posts'; syncBadges(); tagsButton.focus(); } });
   for (const control of [sort, directionControl, format, structure, postType, hintMode]) control.addEventListener('change', scan);
   search.addEventListener('input', schedule);
@@ -91,6 +108,13 @@
   function showNote(text) { note.textContent = text; note.hidden = !text; }
   function scan() {
     clearTimeout(timer); timer = null;
+    try { library.href = api.runtime.getURL('library.html') + '#' + encodeURIComponent(adapters.contextKey(document, location.href)); }
+    catch {
+      grid.reset(); clearBadges(); observer.disconnect(); clearInterval(routeTimer); clearTimeout(metricWriteTimer);
+      if (indexing) { clearTimeout(indexing.timer); indexing = null; indexProgress.hidden = true; }
+      showNote('Content Lens was updated. Refresh this Instagram or TikTok page to reconnect the controls.');
+      return;
+    }
     if (route !== adapters.contextKey(document, location.href)) {
       if (indexing) finishIndexing('Indexing stopped because the page changed.', false);
       routePreferences.set(route, { sort: sort.value, direction: directionControl.value, format: format.value, structure: structure.value, type: postType.value, search: search.value, hints: hintMode.value === 'yes' });
@@ -105,7 +129,6 @@
     rememberPosts(currentPosts);
     indexButton.hidden = !core.scopeFor(location.href);
     indexButton.disabled = !!indexing;
-    library.href = api.runtime.getURL('library.html') + '#' + encodeURIComponent(route);
     const posts = currentPosts.map(post => core.withRememberedMetrics(post, tags));
     model = grids.discover(posts);
     if (!model) { host.remove(); clearBadges(); return; }
@@ -123,16 +146,34 @@
     metricRows.replaceChildren(...Object.entries(available).map(([key, total]) => { const row = el('div', '', 'metric-row'); row.append(el('span', key[0].toUpperCase() + key.slice(1)), el('span', total ? total + ' of ' + posts.length + ' posts' : 'Not exposed on this page')); return row; }));
     const selected = core.selectPosts(model.posts, tags, { metric, direction, format: format.value, structure: structure.value, type: postType.value, search: search.value, hints: hintMode.value === 'yes' });
     const active = metric !== 'order' || format.value || structure.value || postType.value || search.value.trim();
-    if (active && !indexing) grid.apply(model, selected);
+    const filtering = !!(format.value || structure.value || postType.value || search.value.trim());
+    const categoryActive = !!(format.value || structure.value);
+    const categoryMatches = core.selectPosts(model.posts, tags, { format: format.value, structure: structure.value, hints: hintMode.value === 'yes' }).length;
+    const captions = posts.filter(post => post.caption?.trim()).length;
+    emptyTitle.textContent = categoryActive && !categoryMatches ? (hintMode.value ? 'No matching category tags or caption clues' : 'No posts match these manual tags yet') : 'No posts match these filters';
+    emptyText.textContent = categoryActive && !categoryMatches
+      ? 'Presentation and structure use saved labels' + (hintMode.value ? ' or caption clues' : '') + ', not automatic video analysis. Scrolling cannot classify untagged videos. Tag posts or clear the category filters to search captions.'
+      : 'Search, post type, and category filters apply together. ' + captions + ' of ' + posts.length + ' loaded posts have caption text. Try a shorter phrase or remove a filter. Previously indexed posts are available in Browse collection.';
+    clearCategories.hidden = !categoryActive; tagEmpty.hidden = !categoryActive;
+    useHints.hidden = !categoryActive || !!hintMode.value || !core.selectPosts(model.posts, tags, { format: format.value, structure: structure.value, type: postType.value, search: search.value, hints: true }).length;
+    for (const [control, key, title] of [[format, 'format', 'All presentations'], [structure, 'structure', 'All structures']]) {
+      for (const option of control.options) {
+        const matches = option.value ? core.selectPosts(model.posts, tags, { [key]: option.value, hints: hintMode.value === 'yes' }).length : posts.length;
+        option.textContent = option.value ? option.value + ' · ' + matches + (hintMode.value ? ' matches' : ' tagged') : title;
+      }
+    }
+    if (active && !indexing) grid.apply(model, selected, { filtering, empty: emptyHost, filterKey: JSON.stringify([metric, direction, format.value, structure.value, postType.value, search.value, hintMode.value]) });
+    resultHelp.hidden = !filtering || !!indexing || !selected.length;
+    resultHelp.textContent = 'Filtered results scroll in the area below. These are loaded posts only. Browse collection searches your index; Index collection can discover older posts.';
     const known = posts.filter(post => post[metric] != null).length;
     count.textContent = selected.length === posts.length ? `${posts.length} posts loaded` : `${selected.length} / ${posts.length} shown`;
     const numFilters = Number(!!format.value) + Number(!!structure.value) + Number(!!postType.value) + Number(!!search.value.trim());
     reset.hidden = !active && !tagMode; clearFilters.hidden = !numFilters;
     tagsButton.textContent = numFilters ? 'Filters · ' + numFilters : 'Filters';
     coverageText.textContent = metric === 'order' ? 'Metric availability' : known + '/' + posts.length + ' with ' + metric;
-    if (metric !== 'order' && !known) showNote('No ' + metric + ' counts are exposed on these tiles yet. Try hovering over posts or choose another metric. Original order is preserved.');
+    if (!selected.length) showNote('No matching loaded posts. See the explanation and filter controls below.');
+    else if (metric !== 'order' && !known) showNote('No ' + metric + ' counts are exposed on these tiles yet. Try hovering over posts or choose another metric. Original order is preserved.');
     else if (metric !== 'order' && known < posts.length) showNote((posts.length - known) + (posts.length - known === 1 ? ' post has' : ' posts have') + ' unavailable ' + metric + ' counts and ' + (posts.length - known === 1 ? 'appears' : 'appear') + ' last. Scroll to include older posts.');
-    else if (!selected.length) showNote('No matches in these loaded posts. Categories use your tags' + (hintMode.value ? ' and caption suggestions' : '') + '. Browse collection to search previously indexed posts.');
     else if (hintMode.value && (format.value || structure.value)) showNote('Includes caption suggestions, not video analysis. Manual tags take priority; unclassified posts stay out of category results.');
     else if (metric !== 'order') showNote('');
     else if (!available.views && !available.likes && !available.comments) showNote('This collection does not expose counts. Filter by post type, captions, or your tags. Counts read on other pages can be reused here for 24 hours.');
@@ -235,14 +276,14 @@
   }
   const observer = new MutationObserver(records => {
     if (records.some(record => !host.contains(record.target) && !record.target.parentElement?.closest?.('[data-cl-tag]') &&
-      (record.type === 'characterData' || [...record.addedNodes, ...record.removedNodes].some(node => node !== host && !(node.nodeType === 1 && node.hasAttribute('data-cl-tag')))))) schedule();
+      (record.type === 'characterData' || [...record.addedNodes, ...record.removedNodes].some(node => node !== host && !(node.nodeType === 1 && (node.hasAttribute('data-cl-tag') || node.hasAttribute('data-cl-empty'))))))) schedule();
   });
   observer.observe(document.body, { childList: true, characterData: true, subtree: true });
   window.addEventListener('resize', schedule);
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) schedule();
   });
-  setInterval(() => { if (route !== adapters.contextKey(document, location.href) || !host.isConnected) schedule(); }, 1000);
+  const routeTimer = setInterval(() => { if (route !== adapters.contextKey(document, location.href) || !host.isConnected) schedule(); }, 1000);
   api.storage.local.get(null).then(data => {
     const expired = Object.keys(data).filter(key => key.startsWith('metric:') && (!data[key]?.seenAt || Date.now() - data[key].seenAt >= 86400000));
     for (const key of expired) delete data[key];

@@ -35,7 +35,7 @@ Tags and notes persist locally in the browser. Open **Back up tags** (or the ext
 
 The index is an observed snapshot, not a complete or live replica. Platform loading limits, virtualization, and inaccessible posts can prevent full coverage. Removed saves can remain indexed. The library always reports indexed coverage rather than claiming the entire folder is loaded. Currently **tag backups do not include the collection index**; it can be rebuilt by browsing on another device.
 
-Native filters preserve the grid's original minimum height to avoid pulling the platform's loading sentinel upward when posts disappear. Matching native tiles remain together at the top; use the paginated library to avoid browsing the empty area below them.
+Native content filters use a viewport-sized scrolling results area instead of preserving the entire unfiltered grid height. Zero matches show an explanation and recovery buttons. Category options show the number of tagged matches, or caption-suggestion matches when enabled. Tag posts clears category/search constraints so untagged posts remain reachable. Reset restores the site's natural grid layout. Sorting without content filters retains the normal page layout. The bounded results area does not itself discover older posts; use Index collection or return to normal browsing for that.
 
 **Category matching → Include caption suggestions** uses conservative local text rules. Suggestions are explicitly labeled in the library. Captions can discuss storytelling without being a storytelling video, so these are clues rather than reliable classification. Full video/audio analysis is not implemented.
 
@@ -47,7 +47,13 @@ Dropdowns reserve space for consistently inset arrows. Metric availability uses 
 
 The sorter applies CSS grid order to existing native cells across row wrappers. It does not clone, reparent, replace, or download posts, which preserves the site's event handlers and React ownership. Reset removes the extension's layout attributes. Newly rendered rows are rescanned; a return from a reel restores that profile's sorting choice for the current page session.
 
+## Version 0.7.1: filter recovery
+
+Fixed the unbounded blank region caused by the previous grid-height reservation. Filtered native results have a bounded scroll region that retains its scroll position during background rescans. Empty states distinguish missing manual labels from a combined search/type/category mismatch, with one-click ways to clear categories, try useful caption suggestions, or tag loaded posts. The category dropdown, tag button, clear button, and backup link align at 36px height; the dropdown no longer stretches across most of the toolbar.
+
 ## Validation
+
+Version 0.7.1 adds thirteen browser checks in `tests/fixtures/filters.html` for large-grid blank-space regression, missing manual categories, optional suggestions, combined search, recovery, tagging, stable rescanning, preserved result scrolling, action alignment, and invalidated extension context recovery.
 
 Version 0.7: 13 Node checks, 9 collection browser checks, 6 indexing checks, 12 native browsing checks, and 9 saved-collection checks pass. Live Chrome validation indexed 144 Content Study posts across Instagram’s changing live grid, restored the source position after stopping, opened the local library through the extension worker, and returned 15 immediate caption-search matches for “storytelling”. These matches are text search, not confirmed video classifications. The library showed six pages of results with working thumbnail previews. This turn did not revalidate TikTok live.
 

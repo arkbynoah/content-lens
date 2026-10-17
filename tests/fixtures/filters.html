@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>Filter recovery checks</title>
+<style>body{font:14px system-ui;background:#111;color:white;margin:20px}main{max-width:1000px}.grid{display:flex;flex-direction:column}.row{display:flex}.cell{flex:1}.tile{display:block;height:280px}.cover{height:250px;background:#333}.pass{color:#9fe8ae}.fail{color:#ff9999}</style>
+<h1>Filter recovery checks</h1><ol id="results"></ol><main><div id="grid" class="grid"></div></main>
+<script src="../../extension/core.js"></script><script src="../../extension/adapters.js"></script><script src="../../extension/grid.js"></script><script src="../../extension/styles.js"></script>
+<script>
+const gridNode=document.getElementById('grid');let ids=0,scans=0;
+for(let r=0;r<20;r++){const row=document.createElement('div');row.className='row';for(let c=0;c<3;c++){ids++;const cell=document.createElement('div');cell.className='cell';cell.innerHTML='<a class="tile" href="https://www.instagram.com/reel/P'+ids+'/"><img class="cover" alt="'+(ids===1?'Story time: when I was in college':'Editing tutorial '+ids)+'"><span aria-label="'+ids+' views"></span></a>';row.append(cell)}gridNode.append(row)}
+const read=ContentLensAdapters.readTiles;ContentLensAdapters.readTiles=doc=>{scans++;return read(doc,'https://www.instagram.com/me/saved/study/123/')};
+globalThis.browser={runtime:{getURL:()=> '#backup'},storage:{local:{get:async()=>({}),set:async()=>{}},onChanged:{addListener:()=>{}}}};
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+function check(name,ok){const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'PASS: ':'FAIL: ')+name;document.getElementById('results').append(li)}
+function shown(){return [...gridNode.querySelectorAll('.tile')].filter(a=>a.getClientRects().length)}
+</script><script src="../../extension/content.js"></script><script>
+(async()=>{await delay(700);const root=document.getElementById('content-lens-root').shadowRoot;
+const change=(label,value)=>{const control=root.querySelector('[aria-label="'+label+'"]');control.value=value;control.dispatchEvent(new Event('change'))};
+const click=(container,text)=>[...container.querySelectorAll('button')].find(b=>b.textContent===text).click();
+check('Fixture starts with thousands of pixels of native posts',gridNode.getBoundingClientRect().height>5000);
+click(root,'Filters');change('Filter structure tags','Storytelling');
+let empty=gridNode.querySelector('[data-cl-empty]')?.shadowRoot;
+check('Untagged category shows an explicit empty state',shown().length===0&&empty?.textContent.includes('No posts match these manual tags yet'));
+check('No giant blank grid remains',gridNode.getBoundingClientRect().height<=innerHeight);
+check('Empty state offers caption suggestions when they have matches',!([...empty.querySelectorAll('button')].find(b=>b.textContent==='Try caption suggestions').hidden));
+const before=scans;await delay(900);check('Empty-state rendering does not cause a rescan loop',scans-before<=1);
+click(empty,'Try caption suggestions');check('Caption suggestions show the matching post immediately',shown().length===1&&shown()[0].href.includes('/P1/'));
+const query=root.querySelector('input[type=search]');query.value='tutorial';query.dispatchEvent(new Event('input'));await delay(450);empty=gridNode.querySelector('[data-cl-empty]')?.shadowRoot;
+check('Combined category and search explain why there are no results',shown().length===0&&empty?.textContent.includes('apply together'));
+click(empty,'Clear category filters');check('Clearing only categories restores caption search matches',shown().length===59);
+gridNode.scrollTop=500;const beforeTop=gridNode.scrollTop;const external=document.createElement('span');document.body.append(external);await delay(450);
+check('Background rescans preserve scroll within matching results',Math.abs(gridNode.scrollTop-beforeTop)<2);
+change('Filter structure tags','Storytelling');change('Category matching','');empty=gridNode.querySelector('[data-cl-empty]')?.shadowRoot;click(empty,'Tag loaded posts');
+check('Tag action restores posts instead of leaving tagging on an empty grid',shown().length===60&&document.querySelector('[data-cl-tag]'));
+const select=root.querySelector('[aria-label="Category matching"]');const rect=select.getBoundingClientRect();
+check('Action buttons share dropdown height and bottom edge',[...root.querySelectorAll('.filter-buttons button,.filter-buttons a')].filter(n=>!n.hidden).every(n=>{const r=n.getBoundingClientRect();return Math.abs(r.bottom-rect.bottom)<2&&Math.abs(r.height-rect.height)<2}));
+click(root,'Reset');check('Reset restores natural grid layout',!gridNode.hasAttribute('data-cl-filtered')&&gridNode.getBoundingClientRect().height>5000);
+change('Filter structure tags','Storytelling');browser.runtime.getURL=()=>{throw new Error('Extension context invalidated')};document.body.append(document.createElement('span'));await delay(450);
+check('An extension update restores the native grid and asks for refresh',!gridNode.hasAttribute('data-cl-filtered')&&root.querySelector('.note').textContent.includes('Refresh this'));
+document.title=document.querySelector('.fail')?'FAIL — Filter recovery':'PASS — 13 filter recovery checks';})();
+</script></html>
