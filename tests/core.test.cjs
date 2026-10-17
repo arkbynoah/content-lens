@@ -56,3 +56,25 @@ test('extension manifest loads existing files and requests only the intended sit
   assert.deepEqual(manifest.content_scripts[0].matches, ['https://www.instagram.com/*', 'https://www.tiktok.com/*']);
   for (const file of [...manifest.content_scripts[0].js, manifest.action.default_popup, manifest.options_ui.page]) assert.ok(fs.existsSync(path.join(base, file)), file);
 });
+
+test('saved folders and TikTok collections are recognized without treating posts as grids', () => {
+  assert.equal(core.scopeFor('https://www.instagram.com/me/saved/content-study/123/').platform, 'Instagram');
+  assert.equal(core.scopeFor('https://www.tiktok.com/@me/collection/Ideas-123').platform, 'TikTok');
+  assert.equal(core.scopeFor('https://www.tiktok.com/@me/favorites').platform, 'TikTok');
+  assert.equal(core.scopeFor('https://www.tiktok.com/@me/video/123'), null);
+});
+test('post-type filters combine with caption search and manual tags', () => {
+  const posts = [{url:'a',type:'video',caption:'Story hook',order:0},{url:'b',type:'carousel',caption:'Story hook',order:1}];
+  assert.deepEqual(core.selectPosts(posts,{}, {type:'video',search:'hook'}).map(p=>p.url),['a']);
+});
+test('remembered metrics match the same Instagram post across permalink forms', () => {
+  assert.equal(core.metricKey('https://www.instagram.com/reel/ABC/','views'),core.metricKey('https://www.instagram.com/user/p/ABC/','views'));
+  assert.notEqual(core.metricKey('https://www.tiktok.com/@user/video/123','views'),core.metricKey('https://www.instagram.com/reel/123/','views'));
+  const now=100000000,post={url:'https://www.instagram.com/reel/ABC/',views:null,likes:0};
+  const storage={[core.metricKey(post.url,'views')]:{value:4500,seenAt:now-1000},[core.metricKey(post.url,'likes')]:{value:500,seenAt:now-1000}};
+  const result=core.withRememberedMetrics(post,storage,now);
+  assert.equal(result.views,4500);assert.equal(result.likes,0);assert.deepEqual(result.remembered,['views']);
+  for(const entry of [{value:4500,seenAt:now-86400000},{value:4500,seenAt:now+1000},{value:'4500',seenAt:now},{value:-1,seenAt:now}]){
+    assert.equal(core.withRememberedMetrics(post,{[core.metricKey(post.url,'views')]:entry},now).views,null);
+  }
+});

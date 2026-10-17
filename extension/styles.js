@@ -43,4 +43,6 @@ select:hover { background-color:var(--surface); }
 .text-button:hover { background:var(--surface); text-decoration:none; }
 .info-icon { display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; flex:0 0 14px; border:1px solid currentColor; border-radius:50%; font:600 10px/1 Georgia,serif; }
 @media(max-width:650px) { .status-row { gap:8px; } }
+
+.segments button[aria-disabled=true] { opacity:.45; cursor:help; }
 `;

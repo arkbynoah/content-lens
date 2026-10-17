@@ -33,7 +33,7 @@
   function scopeFor(raw) {
     const url = new URL(raw);
     const path = url.pathname.replace(/\/+$/, '') || '/';
-    if (url.hostname === 'www.tiktok.com' && /^\/@[\w.-]+(?:\/(?:liked|favorites))?$/.test(path)) {
+    if (url.hostname === 'www.tiktok.com' && /^\/@[\w.-]+(?:\/(?:liked|favorites)(?:\/[^/]+)?|\/collection\/[^/]+)?$/.test(path)) {
       return { key: url.origin + path, platform: 'TikTok', label: path.slice(1) };
     }
     const parts = path.split('/').filter(Boolean);
@@ -45,11 +45,11 @@
     return null;
   }
 
-  function selectPosts(posts, tags, { metric = 'views', direction = 'desc', search = '', format = '', structure = '' } = {}) {
+  function selectPosts(posts, tags, { metric = 'views', direction = 'desc', search = '', format = '', structure = '', type = '' } = {}) {
     const query = search.trim().toLowerCase();
     return posts.filter(post => {
       const tag = tags['tag:' + post.url] || {};
-      return (!format || tag.format === format) && (!structure || tag.structure === structure) &&
+      return (!type || post.type === type) && (!format || tag.format === format) && (!structure || tag.structure === structure) &&
         (!query || [post.caption, post.url, tag.notes, tag.format, tag.structure].join(' ').toLowerCase().includes(query));
     }).sort((a, b) => {
       if (metric === 'order') return a.order - b.order;
@@ -59,6 +59,24 @@
       if (bv == null) return -1;
       return (direction === 'asc' ? av - bv : bv - av) || a.order - b.order;
     });
+  }
+
+  function metricKey(raw, metric) {
+    const url = canonicalPost(raw);
+    if (!url || !['views', 'likes', 'comments'].includes(metric)) return null;
+    const parsed = new URL(url), parts = parsed.pathname.split('/').filter(Boolean);
+    return 'metric:' + (parsed.hostname.includes('instagram') ? 'ig:' : 'tt:') + parts.at(-1) + ':' + metric;
+  }
+  function withRememberedMetrics(post, storage, now = Date.now()) {
+    const result = { ...post, remembered: [] };
+    for (const metric of ['views', 'likes', 'comments']) {
+      const saved = storage[metricKey(post.url, metric)];
+      if (post[metric] == null && saved && Number.isSafeInteger(saved.value) && saved.value >= 0 &&
+          Number.isFinite(saved.seenAt) && saved.seenAt <= now && now - saved.seenAt < 86400000) {
+        result[metric] = saved.value; result.remembered.push(metric);
+      }
+    }
+    return result;
   }
 
   function cleanTag(tag) {
@@ -88,7 +106,7 @@
       .map(([key, tag]) => ({ url: key.slice(4), ...cleanTag(tag) })) };
   }
 
-  const api = { formats, structures, parseCount, canonicalPost, scopeFor, selectPosts, cleanTag, validateBackup, makeBackup };
+  const api = { formats, structures, parseCount, canonicalPost, scopeFor, selectPosts, metricKey, withRememberedMetrics, cleanTag, validateBackup, makeBackup };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ContentLensCore = api;
 })(globalThis);

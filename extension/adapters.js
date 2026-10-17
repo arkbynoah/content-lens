@@ -32,26 +32,43 @@
     }
     return null;
   }
+  function contextKey(document, rawUrl) {
+    const scope = core.scopeFor(rawUrl);
+    if (!scope) return new URL(rawUrl).pathname;
+    const tab = scope.platform === 'TikTok' ? [...document.querySelectorAll('[role="tab"][aria-selected="true"]')]
+      .find(node => /^(Videos|Favorites|Liked|Reposts)$/i.test(node.textContent.trim()))?.textContent.trim() || '' : '';
+    return scope.key + '|' + tab;
+  }
+  function postType(tile, url) {
+    const labels = [...tile.querySelectorAll('[aria-label],svg title')].map(n => n.getAttribute('aria-label') || n.textContent).join(' ');
+    if (/carousel/i.test(labels)) return 'carousel';
+    if (/\/(?:reel|video)\//.test(url) || /\bclip\b/i.test(labels)) return 'video';
+    if (/\/photo\//.test(url)) return 'carousel';
+    return 'photo';
+  }
   function readTiles(document, rawUrl) {
     const scope = core.scopeFor(rawUrl);
     if (!scope) return [];
     const result = new Map();
-    for (const anchor of (document.querySelector('main') || document).querySelectorAll('a[href]')) {
-      if (anchor.closest('[role="dialog"], #content-lens-root, nav, header')) continue;
+    const ttCards = '[data-e2e="favorites-item"], [data-e2e="user-post-item"], [data-e2e="user-liked-item"]';
+    const root = document.querySelector('main') || document;
+    const anchors = scope.platform === 'TikTok' ? [...document.querySelectorAll(ttCards)].flatMap(card => [...card.querySelectorAll('a[href]')]) : root.querySelectorAll('a[href]');
+    for (const anchor of anchors) {
+      if (anchor.closest('[role="dialog"], #content-lens-root, nav, header, [aria-hidden="true"], [hidden]')) continue;
       const url = core.canonicalPost(anchor.getAttribute('href'), rawUrl);
       if (!url || (scope.platform === 'Instagram') !== url.includes('www.instagram.com')) continue;
-      const tile = scope.platform === 'TikTok' ? anchor.closest('[data-e2e="user-post-item"]') || anchor : anchor;
+      const tile = scope.platform === 'TikTok' ? anchor.closest(ttCards) || anchor : anchor;
       const views = metricCount(tile, 'views');
       const media = [...tile.querySelectorAll('img,video,[style]')].find(node =>
         node.tagName === 'VIDEO' || (node.tagName === 'IMG' && !/^(?:chrome|moz)-extension:/.test(node.getAttribute('src') || '')) || /background-image\s*:/.test(node.getAttribute('style') || ''));
       if (!media && views == null) continue;
       if (!anchor.getClientRects().length && !anchor.closest('[data-cl-hidden]')) continue;
       result.set(url, { url, anchor, tile, views, likes: metricCount(tile, 'likes'), comments: metricCount(tile, 'comments'),
-        caption: (media?.getAttribute('alt') || anchor.getAttribute('title') || '').slice(0, 1500), order: result.size });
+        type: postType(tile, url), caption: (media?.getAttribute('alt') || tile.querySelector('img[alt]')?.getAttribute('alt') || anchor.getAttribute('title') || anchor.getAttribute('aria-label') || '').slice(0, 1500), order: result.size });
     }
     return [...result.values()];
   }
-  const api = { readTiles, metricCount };
+  const api = { readTiles, metricCount, contextKey, postType };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.ContentLensAdapters = api;
 })(globalThis);

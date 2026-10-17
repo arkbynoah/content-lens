@@ -1,0 +1,46 @@
+<!doctype html><html><meta charset="utf-8"><title>Saved collection checks</title>
+<style>body{font:14px system-ui;background:#111;color:white;margin:30px}main{max-width:900px}.grid{display:flex;flex-direction:column}.row{display:flex}.cell{flex:1}.tile{display:block;position:relative;height:200px}.cover{height:160px;background:#333}svg{width:12px;height:12px}.pass{color:#9fe8ae}.fail{color:#ff9999}</style>
+<h1>Saved collection checks</h1><ol id="results"></ol>
+<main><div class="grid"><div class="row">
+<div class="cell"><a class="tile" href="https://www.instagram.com/creator/reel/A/"><img class="cover" alt="A strong storytelling hook"><svg aria-label="Clip"></svg></a></div>
+<div class="cell"><a class="tile" href="https://www.instagram.com/creator/p/B/"><img class="cover" alt="Storytelling examples"><svg aria-label="Carousel"></svg></a></div>
+<div class="cell"><a class="tile" href="https://www.instagram.com/creator/p/C/"><img class="cover" alt="A beautiful sunset"></a></div>
+</div></div></main>
+<script src="../../extension/core.js"></script><script src="../../extension/adapters.js"></script><script src="../../extension/grid.js"></script><script src="../../extension/styles.js"></script>
+<script>
+const originalRead=ContentLensAdapters.readTiles;
+ContentLensAdapters.readTiles=doc=>originalRead(doc,'https://www.instagram.com/me/saved/study/123/');
+let onStorage;
+globalThis.browser={runtime:{getURL:()=> '#backup'},storage:{local:{get:async()=>({}),set:async()=>{}},onChanged:{addListener:fn=>onStorage=fn}}};
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+function check(name,ok){const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=(ok?'PASS: ':'FAIL: ')+name;document.querySelector('#results').append(li);}
+function shown(){return [...document.querySelectorAll('main a')].filter(a=>a.getClientRects().length).map(a=>a.href.split('/').at(-2)).join(',');}
+</script>
+<script src="../../extension/content.js"></script>
+<script>
+(async()=>{
+ await delay(500);const root=document.querySelector('#content-lens-root').shadowRoot;
+ check('Saved collection offers filters without inventing counts',root.querySelector('[data-metric=views]').getAttribute('aria-disabled')==='true');
+ root.querySelector('[data-metric=views]').click();
+ check('Unavailable metric explains the limit without ranking empty counts',!document.querySelector('[data-cl-tag]')&&!document.querySelector('[data-cl-grid]')&&!root.querySelector('#metrics').hidden);
+ const type=root.querySelector('[aria-label="Filter post type"]');type.value='video';type.dispatchEvent(new Event('change'));
+ check('Video filter works on mixed saved posts',shown()==='A');
+ type.value='carousel';type.dispatchEvent(new Event('change'));
+ check('Carousel filter uses the native media-type icon',shown()==='B');
+ type.value='';type.dispatchEvent(new Event('change'));
+ const search=root.querySelector('input[type=search]');search.value='sunset';search.dispatchEvent(new Event('input'));await delay(450);
+ check('Saved captions are searchable without metrics',shown()==='C');
+ search.value='';search.dispatchEvent(new Event('input'));await delay(450);
+ const key=ContentLensCore.metricKey('https://www.instagram.com/p/A/','views');
+ onStorage({[key]:{newValue:{value:45000,seenAt:Date.now()}}},'local');
+ root.querySelector('[data-metric=views]').click();
+ check('Recently seen metrics enable saved-post sorting',root.querySelector('[data-metric=views]').getAttribute('aria-pressed')==='true');
+ const badge=document.querySelector('[data-cl-tag]')?.shadowRoot;
+ check('Remembered counts are visibly marked, never presented as fresh',badge?.textContent.includes('≈')&&root.textContent.includes('counts remembered'));
+ const tt=document.createElement('section');tt.innerHTML='<div data-e2e="inbox-list-item"><a href="https://www.tiktok.com/@a/video/999"><img alt="notification"></a></div><div data-e2e="favorites-item-list"><div data-e2e="favorites-item"><a href="https://www.tiktok.com/@a/video/123"><img alt="Cooking tips"><strong data-e2e="video-views">26.7K</strong></a></div><div data-e2e="favorites-item"><a href="https://www.tiktok.com/@a/photo/456"><img alt="Photo story"><strong data-e2e="video-views">4940</strong></a></div></div>';document.body.append(tt);
+ const posts=originalRead(document,'https://www.tiktok.com/@me/collection/Ideas-123');
+ check('TikTok favorites count is read from the card, not notifications',posts.length===2&&posts[0].views===26700&&posts[1].views===4940);
+ check('TikTok photo posts and videos filter separately',posts[0].type==='video'&&posts[1].type==='carousel');
+ document.title=document.querySelector('.fail')?'FAIL — Saved collections':'PASS — 9 saved collection checks';
+})();
+</script></html>
