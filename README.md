@@ -87,3 +87,7 @@ Open `tests/fixtures/library.html` for nine library checks, `tests/fixtures/brow
 Chrome is the tested target. Edge/Brave can generally share the Chromium package, but are untested. Firefox needs compatibility testing and distribution setup; Safari needs Apple's packaging workflow.
 
 References: [MDN cross-browser extensions](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Build_a_cross_browser_extension), [Safari packaging](https://developer.apple.com/documentation/safariservices/packaging-a-web-extension-for-safari), [Chrome storage](https://developer.chrome.com/docs/extensions/reference/api/storage).
+
+### Extension branding (0.7.2)
+
+The lavender lens mark appears in the Chrome extension menu, toolbar action, extension-page favicons, popup, and native-page toolbar. Chrome uses bundled PNG assets at multiple sizes; the editable vector source is `extension/icons/content-lens.svg`. To regenerate assets, run `python3 scripts/generate-icons.py` with Pillow installed. No image tooling is needed to run the extension. The popup prioritizes browsing indexed posts, with tag backup as a secondary action. Sorting and filters remain beside the native posts.

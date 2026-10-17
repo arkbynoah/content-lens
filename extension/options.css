@@ -6,3 +6,10 @@ h1 { font-size:32px; font-weight:650; line-height:1.2; letter-spacing:-1px; } .p
 section { background:light-dark(#fff,#17171c); border:1px solid light-dark(#e4e4eb,#303036); border-radius:12px; padding:24px; margin:20px 0; }
 button,.button { font:inherit; display:inline-block; color:light-dark(#fff,#201936); background:light-dark(#5a45ce,#c2b9ff); border:0; padding:10px 16px; border-radius:8px; cursor:pointer; text-decoration:none; } button:disabled { opacity:.5; cursor:default; }
 input { font:inherit; max-width:100%; margin:12px 0; } label { display:block; } .error { color:light-dark(#ae2929,#ffa0a0); } :focus-visible { outline:3px solid #a89aec; outline-offset:3px; }
+
+.popup-brand { display:flex; align-items:center; gap:12px; margin:16px 0; }
+.popup-brand img { flex:none; }
+.popup-brand h1 { margin:0; }
+.popup .button { display:block; text-align:center; margin-top:8px; }
+.popup .button.secondary { background:transparent; color:inherit; border:1px solid light-dark(#dcdce5,#393940); }
+.popup .button:hover { filter:brightness(.94); }

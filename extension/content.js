@@ -20,7 +20,7 @@
   const indexPositions = new Map();
   const shell = el('section', '', 'shell'); shell.setAttribute('aria-label', 'Content Lens');
   const bar = el('div', '', 'bar');
-  const brand = el('span', '', 'brand'); brand.append(el('span', '↕', 'mark'), el('span', 'Content Lens'));
+  const brand = el('span', '', 'brand'); const mark = el('span', '', 'mark'); mark.setAttribute('aria-hidden', 'true'); brand.append(mark, el('span', 'Content Lens'));
   const sort = select([['order', 'Original'], ['views:desc', 'Views'], ['likes:desc', 'Likes'], ['comments:desc', 'Comments']], 'Sort posts on this page'); sort.hidden = true;
   const sortGroup = el('div', '', 'segments'); sortGroup.setAttribute('role', 'group'); sortGroup.setAttribute('aria-label', 'Sort native posts');
   const metricButtons = new Map();
